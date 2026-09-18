@@ -11,6 +11,9 @@ app.use(cors());
 app.use(express.json());
 
 connectDB();
+const restaurantRoutes = require("./routes/restaurantRoutes");
+
+app.use("/api/restaurants", restaurantRoutes);
 
 app.get("/", (req, res) => {
   res.json({
