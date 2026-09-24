@@ -1,8 +1,17 @@
 const Table = require("../models/Table");
+const generateTableQR = require("../utils/qrGenerator");
 
 const createTable = async (req, res) => {
   try {
     const table = await Table.create(req.body);
+
+    const qrCode = await generateTableQR(
+      table.restaurant,
+      table._id
+    );
+
+    table.qrCode = qrCode;
+    await table.save();
 
     res.status(201).json({
       message: "Table created successfully",

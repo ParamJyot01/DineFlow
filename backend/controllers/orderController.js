@@ -1,4 +1,5 @@
-const Order = require("../models/Order");
+const Table = require("../models/Table");
+const generateTableQR = require("../utils/qrGenerator");
 
 const createOrder = async (req, res) => {
   try {
