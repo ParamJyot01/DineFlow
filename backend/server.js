@@ -14,6 +14,9 @@ connectDB();
 const restaurantRoutes = require("./routes/restaurantRoutes");
 
 app.use("/api/restaurants", restaurantRoutes);
+const categoryRoutes = require("./routes/categoryRoutes");
+
+app.use("/api/categories", categoryRoutes);
 
 app.get("/", (req, res) => {
   res.json({
