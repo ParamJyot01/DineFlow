@@ -1,5 +1,5 @@
+const mongoose = require("mongoose");
 const Food = require("../models/Food");
-
 const createFood = async (req, res) => {
   try {
     const food = await Food.create(req.body);
@@ -19,6 +19,23 @@ const createFood = async (req, res) => {
 const getFoods = async (req, res) => {
   try {
     const { restaurantId, categoryId } = req.query;
+    if (
+  restaurantId &&
+  !mongoose.Types.ObjectId.isValid(restaurantId)
+) {
+  return res.status(400).json({
+    message: "Invalid restaurant ID",
+  });
+}
+
+if (
+  categoryId &&
+  !mongoose.Types.ObjectId.isValid(categoryId)
+) {
+  return res.status(400).json({
+    message: "Invalid category ID",
+  });
+}
 
     const filter = {};
 
