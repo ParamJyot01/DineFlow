@@ -17,6 +17,9 @@ app.use("/api/restaurants", restaurantRoutes);
 const categoryRoutes = require("./routes/categoryRoutes");
 
 app.use("/api/categories", categoryRoutes);
+const foodRoutes = require("./routes/foodRoutes");
+
+app.use("/api/foods", foodRoutes);
 
 app.get("/", (req, res) => {
   res.json({
