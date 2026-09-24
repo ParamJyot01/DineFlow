@@ -23,6 +23,9 @@ app.use("/api/foods", foodRoutes);
 const tableRoutes = require("./routes/tableRoutes");
 
 app.use("/api/tables", tableRoutes);
+const orderRoutes = require("./routes/orderRoutes");
+
+app.use("/api/orders", orderRoutes);
 
 app.get("/", (req, res) => {
   res.json({
