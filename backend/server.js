@@ -20,6 +20,9 @@ app.use("/api/categories", categoryRoutes);
 const foodRoutes = require("./routes/foodRoutes");
 
 app.use("/api/foods", foodRoutes);
+const tableRoutes = require("./routes/tableRoutes");
+
+app.use("/api/tables", tableRoutes);
 
 app.get("/", (req, res) => {
   res.json({
