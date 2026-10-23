@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Menu from "./pages/Menu";
+import OrderConfirmation from "./pages/OrderConfirmation";
 import "./App.css";
 
 function App() {
@@ -7,8 +8,12 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/menu/:restaurantId/:tableId" element={<Menu />} />
-
+<Route
+    path="/order-confirmation/:orderId"
+    element={<OrderConfirmation />}
+/>
         <Route
+
           path="*"
           element={<Navigate to="/menu/6ab5319aebd9ab0d1f35b744/6ab531d5ebd9ab0d1f35b745" />}
         />

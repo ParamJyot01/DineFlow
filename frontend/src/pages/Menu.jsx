@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-
+import { useNavigate, useParams } from "react-router-dom";
 function Menu() {
     const { restaurantId, tableId } = useParams();
-
+    const navigate = useNavigate();
     const [restaurant, setRestaurant] = useState(null);
     const [table, setTable] = useState(null);
     const [foods, setFoods] = useState([]);
@@ -11,6 +10,9 @@ function Menu() {
     const [loading, setLoading] = useState(true);
     const [cart, setCart] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState("All");
+    const [paymentMethod, setPaymentMethod] = useState("cash");
+    const [checkoutLoading, setCheckoutLoading] = useState(false);
+    const [checkoutMessage, setCheckoutMessage] = useState("");
 
     useEffect(() => {
         fetch(`http://localhost:5000/api/restaurants/${restaurantId}`)
@@ -30,8 +32,8 @@ function Menu() {
                 console.error("Failed to fetch table:", error);
             });
         fetch(
-  `http://localhost:5000/api/foods?restaurantId=${restaurantId}`
-)
+            `http://localhost:5000/api/foods?restaurantId=${restaurantId}`
+        )
             .then((response) => response.json())
             .then((data) => {
                 setFoods(data);
@@ -83,6 +85,47 @@ function Menu() {
                 .filter((item) => item.quantity > 0)
         );
     };
+    const handleCheckout = async () => {
+        if (cart.length === 0 || checkoutLoading) return;
+
+        setCheckoutLoading(true);
+        setCheckoutMessage("");
+
+        try {
+            const response = await fetch("http://localhost:5000/api/orders", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    restaurant: restaurantId,
+                    table: tableId,
+                    paymentMethod,
+                    items: cart.map((item) => ({
+                        food: item._id,
+                        quantity: item.quantity,
+                    })),
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || "Failed to place order");
+            }
+
+setCart([]);
+
+navigate(`/order-confirmation/${data.order._id}`, {
+    state: { order: data.order },
+});
+            setCart([]);
+        } catch (error) {
+            setCheckoutMessage(error.message || "Could not place your order.");
+        } finally {
+            setCheckoutLoading(false);
+        }
+    };
 
     const cartCount = cart.reduce(
         (total, item) => total + item.quantity,
@@ -118,9 +161,9 @@ function Menu() {
                         🛒 <span>{cartCount}</span>
                     </div>
 
-<div className="table-badge">
-  Table {table?.tableNumber || "..."}
-</div>
+                    <div className="table-badge">
+                        Table {table?.tableNumber || "..."}
+                    </div>
                 </div>
             </header>
 
@@ -365,10 +408,45 @@ function Menu() {
                             </strong>
 
                         </div>
+                        <div className="payment-method">
+                            <h3>Payment method</h3>
 
-                        <button className="checkout-button">
-                            Proceed to Checkout
-                            <span>→</span>
+                            <label>
+                                <input
+                                    type="radio"
+                                    name="paymentMethod"
+                                    value="cash"
+                                    checked={paymentMethod === "cash"}
+                                    onChange={(e) => setPaymentMethod(e.target.value)}
+                                />
+                                Cash
+                            </label>
+
+                            <label>
+                                <input
+                                    type="radio"
+                                    name="paymentMethod"
+                                    value="online"
+                                    checked={paymentMethod === "online"}
+                                    onChange={(e) => setPaymentMethod(e.target.value)}
+                                />
+                                Online
+                            </label>
+                        </div>
+
+                        {checkoutMessage && (
+                            <p role="status" aria-live="polite">
+                                {checkoutMessage}
+                            </p>
+                        )}
+
+                        <button
+                            className="checkout-button"
+                            onClick={handleCheckout}
+                            disabled={checkoutLoading || cart.length === 0}
+                        >
+                            {checkoutLoading ? "Placing order..." : "Proceed to Checkout"}
+                            {!checkoutLoading && <span>→</span>}
                         </button>
 
                     </section>
