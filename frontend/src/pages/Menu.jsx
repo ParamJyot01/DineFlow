@@ -1,174 +1,175 @@
+
+import { useCart } from "../context/CartContext";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import UniversalHeader from "../Components/UniversalHeader";
+
 function Menu() {
     const { restaurantId, tableId } = useParams();
     const navigate = useNavigate();
+
     const [restaurant, setRestaurant] = useState(null);
     const [table, setTable] = useState(null);
     const [foods, setFoods] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [cart, setCart] = useState([]);
+
+    const {
+        cart,
+        addToCart,
+        decreaseQuantity,
+        clearCart,
+        cartCount,
+        cartTotal,
+    } = useCart();
+
     const [selectedCategory, setSelectedCategory] = useState("All");
     const [paymentMethod, setPaymentMethod] = useState("cash");
     const [checkoutLoading, setCheckoutLoading] = useState(false);
     const [checkoutMessage, setCheckoutMessage] = useState("");
 
-    useEffect(() => {
-        fetch(`http://localhost:5000/api/restaurants/${restaurantId}`)
-            .then((response) => response.json())
-            .then((data) => {
-                setRestaurant(data);
-            })
-            .catch((error) => {
-                console.error("Failed to fetch restaurant:", error);
-            });
-        fetch(`http://localhost:5000/api/tables/${tableId}`)
-            .then((response) => response.json())
-            .then((data) => {
-                setTable(data);
-            })
-            .catch((error) => {
-                console.error("Failed to fetch table:", error);
-            });
-        fetch(
-            `http://localhost:5000/api/foods?restaurantId=${restaurantId}`
-        )
-            .then((response) => response.json())
-            .then((data) => {
-                setFoods(data);
-                setLoading(false);
-            })
-            .catch((error) => {
-                console.error("Failed to fetch foods:", error);
-                setLoading(false);
-            });
 
-        fetch(
-            `http://localhost:5000/api/categories?restaurantId=${restaurantId}`
-        )
-            .then((response) => response.json())
-            .then((data) => {
-                setCategories(data);
-            })
-            .catch((error) => {
-                console.error("Failed to fetch categories:", error);
-            });
-    }, [restaurantId]);
+useEffect(() => {
+    let cancelled = false;
 
-    const addToCart = (food) => {
-        setCart((currentCart) => {
-            const existingItem = currentCart.find(
-                (item) => item._id === food._id
-            );
+    const loadData = async () => {
+        setLoading(true);
 
-            if (existingItem) {
-                return currentCart.map((item) =>
-                    item._id === food._id
-                        ? { ...item, quantity: item.quantity + 1 }
-                        : item
-                );
+        const fetchData = async (url, fallback) => {
+            try {
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    console.error(
+                        `Request failed (${response.status}):`,
+                        url
+                    );
+                    return fallback;
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error("Request error:", url, error);
+                return fallback;
             }
+        };
 
-            return [...currentCart, { ...food, quantity: 1 }];
-        });
+        const [
+            restaurantData,
+            tableData,
+            foodsData,
+            categoriesData,
+        ] = await Promise.all([
+            fetchData(
+                `http://localhost:5000/api/restaurants/${restaurantId}`,
+                null
+            ),
+            fetchData(
+                `http://localhost:5000/api/tables/${tableId}`,
+                null
+            ),
+            fetchData(
+                `http://localhost:5000/api/foods?restaurantId=${restaurantId}`,
+                []
+            ),
+            fetchData(
+                `http://localhost:5000/api/categories?restaurantId=${restaurantId}`,
+                []
+            ),
+        ]);
+
+        if (!cancelled) {
+            setRestaurant(restaurantData);
+            setTable(tableData);
+            setFoods(Array.isArray(foodsData) ? foodsData : []);
+            setCategories(
+                Array.isArray(categoriesData) ? categoriesData : []
+            );
+            setLoading(false);
+        }
     };
 
-    const decreaseQuantity = (foodId) => {
-        setCart((currentCart) =>
-            currentCart
-                .map((item) =>
-                    item._id === foodId
-                        ? { ...item, quantity: item.quantity - 1 }
-                        : item
-                )
-                .filter((item) => item.quantity > 0)
-        );
+    loadData();
+
+    return () => {
+        cancelled = true;
     };
+}, [restaurantId, tableId]);
+
+
     const handleCheckout = async () => {
-        if (cart.length === 0 || checkoutLoading) return;
+        if (cart.length === 0 || checkoutLoading) {
+            return;
+        }
 
         setCheckoutLoading(true);
         setCheckoutMessage("");
 
         try {
-            const response = await fetch("http://localhost:5000/api/orders", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    restaurant: restaurantId,
-                    table: tableId,
-                    paymentMethod,
-                    items: cart.map((item) => ({
-                        food: item._id,
-                        quantity: item.quantity,
-                    })),
-                }),
-            });
+            const response = await fetch(
+                "http://localhost:5000/api/orders",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        restaurant: restaurantId,
+                        table: tableId,
+                        paymentMethod,
+                        items: cart.map((item) => ({
+                            food: item._id,
+                            quantity: item.quantity,
+                        })),
+                    }),
+                }
+            );
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.message || "Failed to place order");
+                throw new Error(
+                    data.message || "Failed to place order."
+                );
             }
 
-setCart([]);
+            if (!data.order?._id) {
+                throw new Error(
+                    "The server did not return an order ID."
+                );
+            }
 
-navigate(`/order-confirmation/${data.order._id}`, {
-    state: { order: data.order },
-});
-            setCart([]);
+            clearCart();
+
+            navigate(
+                `/order-confirmation/${data.order._id}`,
+                {
+                    state: { order: data.order },
+                }
+            );
         } catch (error) {
-            setCheckoutMessage(error.message || "Could not place your order.");
+            setCheckoutMessage(
+                error.message || "Could not place your order."
+            );
         } finally {
             setCheckoutLoading(false);
         }
     };
 
-    const cartCount = cart.reduce(
-        (total, item) => total + item.quantity,
-        0
-    );
-
-    const cartTotal = cart.reduce(
-        (total, item) => total + item.price * item.quantity,
-        0
-    );
-
     const filteredFoods =
         selectedCategory === "All"
             ? foods
             : foods.filter(
-                (food) =>
-                    food.category?.name?.toLowerCase() ===
-                    selectedCategory.toLowerCase()
-            );
+                  (food) =>
+                      food.category?.name?.toLowerCase() ===
+                      selectedCategory.toLowerCase()
+              );
 
     return (
         <div className="menu-page">
-
             {/* HEADER */}
-            <header className="menu-header">
-                <div className="brand">
-                    <h1>DineFlow</h1>
-                    <span>Restaurant Menu</span>
-                </div>
-
-                <div className="header-actions">
-                    <div className="cart-badge">
-                        🛒 <span>{cartCount}</span>
-                    </div>
-
-                    <div className="table-badge">
-                        Table {table?.tableNumber || "..."}
-                    </div>
-                </div>
-            </header>
-
+           <UniversalHeader activePage="menu" variant="menu" />
             <main className="menu-content">
-
                 {/* RESTAURANT HERO */}
                 <section className="restaurant-hero">
                     <div>
@@ -190,10 +191,10 @@ navigate(`/order-confirmation/${data.order._id}`, {
 
                 {/* CATEGORIES */}
                 <nav className="category-tabs">
-
                     <button
-                        className={`category-tab ${selectedCategory === "All" ? "active" : ""
-                            }`}
+                        className={`category-tab ${
+                            selectedCategory === "All" ? "active" : ""
+                        }`}
                         onClick={() => setSelectedCategory("All")}
                     >
                         All
@@ -202,8 +203,11 @@ navigate(`/order-confirmation/${data.order._id}`, {
                     {categories.map((category) => (
                         <button
                             key={category._id}
-                            className={`category-tab ${selectedCategory === category.name ? "active" : ""
-                                }`}
+                            className={`category-tab ${
+                                selectedCategory === category.name
+                                    ? "active"
+                                    : ""
+                            }`}
                             onClick={() =>
                                 setSelectedCategory(category.name)
                             }
@@ -211,12 +215,10 @@ navigate(`/order-confirmation/${data.order._id}`, {
                             {category.name}
                         </button>
                     ))}
-
                 </nav>
 
                 {/* MENU */}
                 <section className="menu-section">
-
                     <div className="section-heading">
                         <div>
                             <span className="section-label">
@@ -240,9 +242,7 @@ navigate(`/order-confirmation/${data.order._id}`, {
                         </p>
                     ) : filteredFoods.length === 0 ? (
                         <div className="empty-menu">
-                            <div className="empty-icon">
-                                🍽️
-                            </div>
+                            <div className="empty-icon">🍽️</div>
 
                             <h3>No items here yet</h3>
 
@@ -253,15 +253,12 @@ navigate(`/order-confirmation/${data.order._id}`, {
                         </div>
                     ) : (
                         <div className="food-grid">
-
                             {filteredFoods.map((food) => (
                                 <article
                                     className="food-card"
                                     key={food._id}
                                 >
-
                                     <div className="food-image">
-
                                         {food.image ? (
                                             <img
                                                 src={food.image}
@@ -276,11 +273,9 @@ navigate(`/order-confirmation/${data.order._id}`, {
                                                 ● VEG
                                             </span>
                                         )}
-
                                     </div>
 
                                     <div className="food-details">
-
                                         <span className="food-category">
                                             {food.category?.name || "Food"}
                                         </span>
@@ -290,7 +285,6 @@ navigate(`/order-confirmation/${data.order._id}`, {
                                         <p>{food.description}</p>
 
                                         <div className="food-bottom">
-
                                             <strong>
                                                 ₹{food.price}
                                             </strong>
@@ -304,25 +298,18 @@ navigate(`/order-confirmation/${data.order._id}`, {
                                                 <span>+</span>
                                                 Add
                                             </button>
-
                                         </div>
-
                                     </div>
-
                                 </article>
                             ))}
-
                         </div>
                     )}
-
                 </section>
 
-                {/* CART */}
+                {/* EXISTING INLINE CART — KEPT */}
                 {cart.length > 0 && (
                     <section className="cart-section">
-
                         <div className="cart-header">
-
                             <div>
                                 <span className="section-label">
                                     YOUR ORDER
@@ -333,81 +320,61 @@ navigate(`/order-confirmation/${data.order._id}`, {
 
                             <span className="cart-items-count">
                                 {cartCount}{" "}
-                                {cartCount === 1
-                                    ? "item"
-                                    : "items"}
+                                {cartCount === 1 ? "item" : "items"}
                             </span>
-
                         </div>
 
                         <div className="cart-items">
-
                             {cart.map((item) => (
                                 <div
                                     className="cart-item"
                                     key={item._id}
                                 >
-
                                     <div className="cart-item-info">
-
                                         <h3>{item.name}</h3>
-
-                                        <p>
-                                            ₹{item.price} each
-                                        </p>
-
+                                        <p>₹{item.price} each</p>
                                     </div>
 
                                     <div className="cart-item-right">
-
                                         <div className="quantity-controls">
-
                                             <button
                                                 onClick={() =>
-                                                    decreaseQuantity(
-                                                        item._id
-                                                    )
+                                                    decreaseQuantity(item._id)
                                                 }
+                                                aria-label={`Decrease ${item.name}`}
                                             >
                                                 −
                                             </button>
 
-                                            <span>
-                                                {item.quantity}
-                                            </span>
+                                            <span>{item.quantity}</span>
 
                                             <button
                                                 onClick={() =>
                                                     addToCart(item)
                                                 }
+                                                aria-label={`Increase ${item.name}`}
                                             >
                                                 +
                                             </button>
-
                                         </div>
 
                                         <strong>
                                             ₹
-                                            {item.price *
-                                                item.quantity}
+                                            {(
+                                                Number(item.price) *
+                                                item.quantity
+                                            ).toFixed(2)}
                                         </strong>
-
                                     </div>
-
                                 </div>
                             ))}
-
                         </div>
 
                         <div className="cart-total">
-
                             <span>Total</span>
-
-                            <strong>
-                                ₹{cartTotal}
-                            </strong>
-
+                            <strong>₹{cartTotal.toFixed(2)}</strong>
                         </div>
+
                         <div className="payment-method">
                             <h3>Payment method</h3>
 
@@ -417,7 +384,9 @@ navigate(`/order-confirmation/${data.order._id}`, {
                                     name="paymentMethod"
                                     value="cash"
                                     checked={paymentMethod === "cash"}
-                                    onChange={(e) => setPaymentMethod(e.target.value)}
+                                    onChange={(event) =>
+                                        setPaymentMethod(event.target.value)
+                                    }
                                 />
                                 Cash
                             </label>
@@ -428,10 +397,19 @@ navigate(`/order-confirmation/${data.order._id}`, {
                                     name="paymentMethod"
                                     value="online"
                                     checked={paymentMethod === "online"}
-                                    onChange={(e) => setPaymentMethod(e.target.value)}
+                                    onChange={(event) =>
+                                        setPaymentMethod(event.target.value)
+                                    }
                                 />
                                 Online
                             </label>
+
+                            {paymentMethod === "online" && (
+                                <p>
+                                    Online payment requires a connected
+                                    payment gateway to collect real payments.
+                                </p>
+                            )}
                         </div>
 
                         {checkoutMessage && (
@@ -443,38 +421,37 @@ navigate(`/order-confirmation/${data.order._id}`, {
                         <button
                             className="checkout-button"
                             onClick={handleCheckout}
-                            disabled={checkoutLoading || cart.length === 0}
+                            disabled={
+                                checkoutLoading || cart.length === 0
+                            }
                         >
-                            {checkoutLoading ? "Placing order..." : "Proceed to Checkout"}
+                            {checkoutLoading
+                                ? "Placing order..."
+                                : "Proceed to Checkout"}
                             {!checkoutLoading && <span>→</span>}
                         </button>
-
                     </section>
                 )}
-
             </main>
 
             {/* MOBILE CART */}
             {cart.length > 0 && (
                 <div className="mobile-cart-bar">
-
                     <div>
-                        <strong>
-                            🛒 {cartCount} items
-                        </strong>
-
-                        <span>
-                            ₹{cartTotal}
-                        </span>
+                        <strong>🛒 {cartCount} items</strong>
+                        <span>₹{cartTotal.toFixed(2)}</span>
                     </div>
 
-                    <button>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            navigate(`/cart/${restaurantId}/${tableId}`)
+                        }
+                    >
                         View Cart →
                     </button>
-
                 </div>
             )}
-
         </div>
     );
 }
